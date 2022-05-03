@@ -1,0 +1,55 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: https-re-app
+  name: https-re-app
+spec:
+  selector:
+    matchLabels:
+      app: https-re-app
+  template:
+    metadata:
+      labels:
+        app: https-re-app
+    spec:
+      containers:
+      - image: node:lts-alpine3.14
+        name: user-container
+        command:
+          - "node"
+          - "-e"
+        args:
+        - |
+          const http = require('https');
+          const options = {
+            key: fs.readFileSync('/etc/tls/private/tls.key'),
+            cert: fs.readFileSync('/etc/tls/private/tls.crt')
+          };
+          https.createServer(options, (req, res) => {
+            res.writeHead(200);
+            res.end('hello world\n');
+          }).listen(8443);
+        volumeMounts:
+        - mountPath: /etc/tls/private
+          name: tls
+      volumes:
+        - name: tls
+          secret:
+            secretName: tls-reencrypt
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app: https-re-app
+  name: https-re-app
+  annotations:
+    service.beta.openshift.io/serving-cert-secret-name: tls-reencrypt
+spec:
+  ports:
+  - port: 443
+    protocol: TCP
+    targetPort: 8443
+  selector:
+    app: https-re-app
